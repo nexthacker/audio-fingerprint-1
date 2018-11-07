@@ -33,7 +33,7 @@ if __name__ == '__main__':
                 tgt = os.path.join( BASEDIR, dup)
                 tgt_stat = os.stat( tgt)
                 if src_stat.st_ino != tgt_stat.st_ino:
-                    print( "ln -f '%s' '%s'" % (
+                    print( "ln -f $'%s' $'%s'" % (
                         src.replace("'", "\\'"),
                         tgt.replace("'", "\\'")))
     finally:

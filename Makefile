@@ -5,6 +5,7 @@ DB    = db.sqlite3
 .PHONY: scan dbshell clean tidy link
 
 scan: $(DB) .venv3 $(MUSIC)
+	which fpcalc
 	nice $(BIN)/python3 scan.py "$(MUSIC)"
 
 $(DB): schema.sql
@@ -18,10 +19,10 @@ clean:
 
 tidy: clean
 	rm -rf .venv3
-	
+
 link:
 	$(MAKE) scan
-	$(BIN)/python3 dedup.py | sh -v
+	$(BIN)/python3 dedup.py | bash -v
 
 .venv3: requirements.txt
 	[ -d $@ ] || python3 -m venv $@

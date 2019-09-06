@@ -5,19 +5,15 @@
 '''
 
 from argparse import ArgumentParser
-from curio import subprocess
-import base64, curio, json, os, re, sqlite3
+import base64, curio, json, multiprocessing, os, re, sqlite3, subprocess
 
 
 DBPATH = 'db.sqlite3'
 AUDIO = set( ('.aac', '.flac', '.m4a', '.mp3', '.wav'))
 
-INSERT_SQL = "INSERT INTO fingerprints (path, fp, duration) VALUES (?, ?, ?);"
-SELECT_SQL = "SELECT path FROM fingerprints;"
-DELETE_SQL = "DELETE FROM fingerprints WHERE path=?;"
-
-BASEDIR = '/usr/local/radio'
-PREFIX = re.compile( '^%s/' % BASEDIR)
+INSERT_SQL = "INSERT INTO fingerprint (path, fp, duration) VALUES (?, ?, ?);"
+SELECT_SQL = "SELECT path FROM fingerprint;"
+DELETE_SQL = "DELETE FROM fingerprint WHERE path=?;"
 
 PATHS = set()
 
@@ -41,20 +37,20 @@ def walk( dirs):
                 yield utf8( path)
 
 
-async def fingerprint( path):
+def fingerprint( path):
     'Get an AcoustID audio fingerprint'
-    data = await subprocess.check_output( ['fpcalc', '-json', path])
+    data = subprocess.run( ['fpcalc', '-json', path],
+        capture_output=True, check=True, text=True, encoding='UTF8').stdout
         
-    result = json.loads( str( data, 'UTF8'))
+    result = json.loads( data)
     fp = base64.b85decode( result['fingerprint'])
     duration = result['duration']
     
-    trimmed = PREFIX.sub( '', path)
-    print( trimmed, duration)
-    return (trimmed, fp, duration)
+    print( path, duration)
+    return (path, fp, duration)
 
 
-async def scan( cur, dirs):
+def scan( cur, dirs):
     'Synchronize the fingerprint database with the file system'
     
     # Fetch already processed paths
@@ -63,29 +59,19 @@ async def scan( cur, dirs):
     
     # Remove vanished paths from DB
     for path in PATHS:
-        if not os.path.isfile( os.path.join( BASEDIR, path)):
+        if not os.path.isfile( path):
             print( '-', path)
             cur.execute( DELETE_SQL, (path,))
 
-    # Add fingerprints for new files at full throttle
-    cpus = os.cpu_count()
-    running = 0
-    async with curio.TaskGroup() as tasks:
+    def get_paths():
         for path in walk( dirs):
-            trimmed = PREFIX.sub( '', path)
-            assert len( trimmed) < 255
-
-            if trimmed not in PATHS:
-                if running == cpus:
-                    # Limit number of subprocesses to available CPUs
-                    t = await tasks.next_done()
-                    running -= 1
-                    cur.execute( INSERT_SQL, t.result)
-                running += 1
-                await tasks.spawn( fingerprint, path)
-        # Collect remaining results
-        async for t in tasks:
-            cur.execute( INSERT_SQL, t.result)
+            assert len( path) < 255
+            if path not in PATHS: yield path
+    
+    # Add fingerprints for new files at full throttle
+    with multiprocessing.Pool() as pool:
+        cur.executemany( INSERT_SQL,
+            pool.imap_unordered( fingerprint, get_paths(), 2 * os.cpu_count()))
             
 
 if __name__ == '__main__':
@@ -96,7 +82,7 @@ if __name__ == '__main__':
 
     try:
         conn = sqlite3.connect( DBPATH, isolation_level=None)
-        cur = conn.cursor()        
-        curio.run( scan, cur, args.file)
+        cur = conn.cursor()
+        scan( cur, args.file)
     finally:
         conn.close()

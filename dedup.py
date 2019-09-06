@@ -9,8 +9,7 @@ import os, sqlite3
 
 
 DBPATH = 'db.sqlite3'
-BASEDIR = '/usr/local/radio'
-SELECT_SQL = """SELECT path, duration, fp FROM fingerprints
+SELECT_SQL = """SELECT path, duration, fp FROM fingerprint
                 WHERE duration > 90.0 AND duration < 300.0;"""
 
 if __name__ == '__main__':
@@ -27,10 +26,9 @@ if __name__ == '__main__':
         
         for fp in sorted( d):
             dups = sorted( d[fp])
-            src = os.path.join( BASEDIR, dups[0])
+            src = dups[0]
             src_stat = os.stat( src)
-            for dup in dups[1:]:
-                tgt = os.path.join( BASEDIR, dup)
+            for tgt in dups[1:]:
                 tgt_stat = os.stat( tgt)
                 if src_stat.st_ino != tgt_stat.st_ino:
                     print( "ln -f $'%s' $'%s'" % (

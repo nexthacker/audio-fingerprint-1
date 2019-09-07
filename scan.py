@@ -5,7 +5,7 @@
 '''
 
 from argparse import ArgumentParser
-import base64, curio, json, multiprocessing, os, re, sqlite3, subprocess
+import base64, concurrent.futures, json, os, sqlite3, subprocess
 
 
 DBPATH = 'db.sqlite3'
@@ -69,15 +69,15 @@ def scan( cur, dirs):
             if path not in PATHS: yield path
     
     # Add fingerprints for new files at full throttle
-    with multiprocessing.Pool() as pool:
+    with concurrent.futures.ThreadPoolExecutor( os.cpu_count()) as pool:
         cur.executemany( INSERT_SQL,
-            pool.imap_unordered( fingerprint, get_paths(), 2 * os.cpu_count()))
+            pool.map( fingerprint, get_paths()))
             
 
 if __name__ == '__main__':
     
     parser = ArgumentParser( description='Scan music files.')
-    parser.add_argument( 'file', nargs='*', help='Files or directories')
+    parser.add_argument( 'file', nargs='*', help='File or directory names')
     args = parser.parse_args()
 
     try:

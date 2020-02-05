@@ -40,7 +40,7 @@ def walk( dirs):
 def fingerprint( path):
     'Get an AcoustID audio fingerprint'
     data = subprocess.run( ['fpcalc', '-json', path],
-        capture_output=True, check=True, text=True, encoding='UTF8').stdout
+        stdout=subprocess.PIPE, check=True, encoding='UTF8').stdout
         
     result = json.loads( data)
     fp = base64.b85decode( result['fingerprint'])
